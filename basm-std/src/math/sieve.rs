@@ -6,13 +6,13 @@ use alloc::vec::Vec;
 /// and by using a linear sieve algorithm.
 /// The growth strategy is to increase the upper bound by 50% each time.
 pub struct LinearSieve {
-    upto: i64,
-    smallest_prime_factor: Vec<i64>,
-    primes: Vec<i64>,
+    upto: usize,  // == smallest_prime_factor.len() - 1
+    smallest_prime_factor: Vec<usize>,
+    primes: Vec<usize>,
     mu: Vec<i8>,
-    phi: Vec<i64>,
-    //d: Vec<i64>,
-    //s: Vec<i64>
+    phi: Vec<usize>,
+    //d: Vec<usize>,
+    //s: Vec<usize>
 }
 
 impl LinearSieve {
@@ -28,79 +28,82 @@ impl LinearSieve {
             //s: vec![0, 1]
         }
     }
+
     /// Returns true if and only if `x` is a prime number.
-    pub fn is_prime(&mut self, x: i64) -> bool {
-        let x = Self::sanitize(x);
-        x > 0 && self.smallest_prime_factor(x) == x
+    pub fn is_prime(&mut self, x: usize) -> bool {
+        x > 1 && self.smallest_prime_factor(x) == x
     }
-    /// Smallest prime factor of `x` (`x=75` returns `3`).
-    pub fn smallest_prime_factor(&mut self, x: i64) -> i64 {
+
+    /// Returns the smallest prime factor of `x` (e.g. returns `3` for `x = 75`).
+    /// Returns `x` back if `x <= 1`.
+    pub fn smallest_prime_factor(&mut self, x: usize) -> usize {
         self.ensure_upto(x);
-        self.smallest_prime_factor[x as usize]
+        self.smallest_prime_factor[x]
     }
-    /// `n`th prime (setting `n=1` returns the 1st prime which is `2`).
-    pub fn nth_prime(&mut self, n: usize) -> i64 {
+
+    /// Returns the `n`-th prime in 1-based index (e.g. returns `2` for `n = 1`).
+    /// TODO: Why don't make it 0-based and just remove the assert?
+    pub fn nth_prime(&mut self, n: usize) -> usize {
         assert!(n >= 1);
         while self.primes.len() < n {
             self.ensure_upto(self.upto + 1);
         }
         self.primes[n - 1]
     }
+
     /// Mobius function.
-    pub fn mu(&mut self, x: i64) -> i64 {
+    pub fn mu(&mut self, x: usize) -> i8 {
         assert!(x >= 1);
-        if self.mu.len() <= x as usize {
-            let upto = Self::next_len(self.mu.len() as i64 - 1, x);
+        if self.mu.len() <= x {
+            let upto = Self::next_len(self.mu.len() - 1, x);
             self.ensure_upto(upto);
-            self.mu.resize(upto as usize + 1, 0);
+            self.mu.resize(upto + 1, 0);
             for i in 2..=upto {
                 if self.is_prime(i) {
-                    self.mu[i as usize] = -1;
+                    self.mu[i] = -1;
                 }
                 let lp = self.smallest_prime_factor(i);
                 for &p in self.primes.iter() {
                     if i * p > upto || p > lp {
                         break;
                     }
-                    self.mu[(i * p) as usize] = if lp == p {
-                        0
-                    } else {
-                        -self.mu[i as usize]
-                    };
+                    self.mu[i * p] = if lp == p { 0 } else { -self.mu[i] };
                 }
             }
         }
-        self.mu[x as usize] as i64
+        self.mu[x]
     }
+
     /// Euler's totient function.
-    pub fn phi(&mut self, x: i64) -> i64 {
+    pub fn phi(&mut self, x: usize) -> usize {
         assert!(x >= 1);
-        if self.phi.len() <= x as usize {
-            let upto = Self::next_len(self.phi.len() as i64 - 1, x);
+        if self.phi.len() <= x {
+            let upto = Self::next_len(self.phi.len() - 1, x);
             self.ensure_upto(upto);
-            self.phi.resize(upto as usize + 1, 0);
+            self.phi.resize(upto + 1, 0);
             for i in 2..=upto {
                 if self.is_prime(i) {
-                    self.phi[i as usize] = i - 1;
+                    self.phi[i] = i - 1;
                 }
                 let lp = self.smallest_prime_factor(i);
                 for &p in self.primes.iter() {
                     if i * p > upto || p > lp {
                         break;
                     }
-                    self.phi[(i * p) as usize] = if lp == p {
-                        self.phi[i as usize] * p
+                    self.phi[i * p] = if lp == p {
+                        self.phi[i] * p
                     } else {
-                        self.phi[i as usize] * (p - 1)
+                        self.phi[i] * (p - 1)
                     };
                 }
             }
         }
-        self.phi[x as usize]
+        self.phi[x]
     }
+
     /// Number of positive divisors of x.
     /// Note: This function can be slow. Performance optimization will be done later.
-    pub fn d(&mut self, mut x: i64) -> i64 {
+    pub fn d(&mut self, mut x: usize) -> usize {
         x = Self::sanitize(x);
         let mut ans = 1;
         while x > 1 {
@@ -114,9 +117,10 @@ impl LinearSieve {
         }
         ans
     }
+
     /// Sum of positive divisors of x.
     /// Note: This function can be slow. Performance optimization will be done later.
-    pub fn s(&mut self, mut x: i64) -> i64 {
+    pub fn s(&mut self, mut x: usize) -> usize {
         x = Self::sanitize(x);
         let mut ans = 1;
         while x > 1 {
@@ -130,8 +134,9 @@ impl LinearSieve {
         }
         ans
     }
+
     /// Returns the positive divisors of x, in ascending order.
-    pub fn divisors(&mut self, mut x: i64) -> Vec<i64> {
+    pub fn divisors(&mut self, mut x: usize) -> Vec<usize> {
         x = Self::sanitize(x);
         if x == 1 {
             vec![1]
@@ -155,34 +160,64 @@ impl LinearSieve {
             out
         }
     }
-    fn ensure_upto(&mut self, x: i64) {
+
+    /// Ensures that every integer in [1, x] is precomputed.
+    fn ensure_upto(&mut self, x: usize) {
         if x > self.upto {
+            // (prev_upto, x] are the numbers which needs computation.
+            // We already know everything about [1, prev_upto].
+            let prev_upto = self.upto;
+            // next_len below returns max(self.upto*3/2, x). This loop is executed only when
+            // x > self.upto, so the new self.upto is always self.upto*3/2. This ensures
+            // amortization, but the implementation for now is quite weird...
             self.upto = Self::next_len(self.upto, x);
-            self.smallest_prime_factor.resize(self.upto as usize + 1, 0);
-            self.primes.clear();
+            self.smallest_prime_factor.resize(self.upto + 1, 0);
+            // self.primes.clear(); - We don't need to clear self.primes at all!
             for i in 2..=self.upto {
-                if self.smallest_prime_factor[i as usize] == 0 ||
-                   self.smallest_prime_factor[i as usize] == i {
-                    self.primes.push(i);
-                    self.smallest_prime_factor[i as usize] = i;
+                if self.smallest_prime_factor[i] == 0 || self.smallest_prime_factor[i] == i {
+                    if i > prev_upto {
+                        self.primes.push(i);
+                    }
+                    self.smallest_prime_factor[i] = i;
                 }
-                for &p in self.primes.iter() {
-                    if i * p > self.upto || p > self.smallest_prime_factor[i as usize] {
+                let look_from = self
+                    .primes
+                    .partition_point(|&p| i.checked_mul(p).is_some_and(|v| v <= prev_upto));
+                for &p in self.primes.iter().skip(look_from) {
+                    if i * p > self.upto || p > self.smallest_prime_factor[i] {
                         break;
                     }
-                    self.smallest_prime_factor[(i * p) as usize] = p;
+                    self.smallest_prime_factor[i * p] = p;
                 }
             }
         }
     }
-    fn sanitize(x: i64) -> i64 {
-        let out = if x < 0 { -x } else { x };
+
+    /// Ensure that the value of `x` makes sense.
+    /// All it does is just panicing if `x == 0`.
+    ///
+    /// # Why is sanitization here?
+    /// The original implementation mainly used a sigend integer, so we had to make it to an
+    /// absolute value before any calculation.
+    /// Yes, I know that this explanation isn't sufficient enough, but it was there...
+    ///
+    /// # Panic
+    /// Panics if `x = 0`.
+    fn sanitize(x: usize) -> usize {
+        // As x is usize, x < 0 is always false.
+        // let out = if x < 0 { -x } else { x };
+        let out = x;
         assert!(x > 0);
         out
     }
-    fn next_len(cur_upto: i64, x: i64) -> i64 {
+
+    fn next_len(cur_upto: usize, x: usize) -> usize {
         let out = cur_upto + (cur_upto >> 1) + 1;
-        if x > out { x } else { out }
+        if x > out {
+            x
+        } else {
+            out
+        }
     }
 }
 
@@ -195,6 +230,17 @@ impl Default for LinearSieve {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn check_is_prime() {
+        let mut ls = LinearSieve::new();
+        assert_eq!(false, ls.is_prime(0));
+        assert_eq!(false, ls.is_prime(1));
+        assert_eq!(true, ls.is_prime(2));
+        assert_eq!(true, ls.is_prime(3));
+        assert_eq!(false, ls.is_prime(20));
+        assert_eq!(true, ls.is_prime(19));
+    }
 
     #[test]
     fn check_mu() {
