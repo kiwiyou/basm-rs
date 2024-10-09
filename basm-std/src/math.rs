@@ -6,6 +6,8 @@ mod pollard_rho;
 pub use pollard_rho::factorize;
 mod reeds_sloane;
 pub use reeds_sloane::{linear_fit, reeds_sloane};
+pub mod static_modint;
+pub mod dynamic_modint;
 
 pub mod ntt;
 pub use ntt::*;
